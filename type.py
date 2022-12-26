@@ -188,7 +188,7 @@ def parse_type(node : c_ast.Node):
         elif ty == "double": return Primitive("double", mod, True)
         elif ty == "float": return Primitive("float", mod, True)
         elif ty == "bool": return Primitive("bool", 0, False)
-        elif ty == "__int128": return Primitive("int128", mod, signed)
+        elif ty == "__int128": return Primitive("int", mod-2, signed)
         elif ty == "void": return Primitive("void", mod, signed)
         raise Exception("Unimplemented Primitive: " + ty)
 

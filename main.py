@@ -11,11 +11,21 @@ DEFAULT_HEADERS = [
 
 
 import _global
-typename = sys.argv[1]
-includes = sys.argv[2:] if len(sys.argv) > 2 else []
+argv = sys.argv[:]
+pretty = "-p" in argv
+
+if pretty:
+    idx = argv.index("-p")
+    argv = argv[:idx] + argv[idx+1:]
+
+if len(argv) < 2:
+    print("Error: Expected a type name")
+    exit(1)
+
+typename = argv[1]
+includes = argv[2:] if len(argv) > 2 else []
 includes += DEFAULT_HEADERS
 
-fname = "tmp.h"
 
 _global.init()
 
@@ -126,8 +136,7 @@ for k, d in DECLS.items():
 
 d = DECLS[typename]
 
-for v in DECLS.values():
-    print(v.encode())
-
-# print(d)
-# print(d.encode())
+if pretty:
+    print(d)
+else:
+    print(d.encode())
