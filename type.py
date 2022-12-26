@@ -216,6 +216,6 @@ def parse_type(node : c_ast.Node):
         for d in node.decls:
             m[d.name] = parse_type(d.type)
         return Union(m)
-    if isinstance(node, c_ast.FuncDecl): return Ptr(Opaque("func"))
+    if isinstance(node, c_ast.FuncDecl): return Opaque("func")
     node.show()
     raise Exception("Unimplemented Type Node") 

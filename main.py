@@ -99,7 +99,6 @@ def extract_decls_from_ast(ast):
     DeclVisitor().visit(ast)
 
     for k, v in DECLS.items():
-        print(k)
         t = parse_type(v)
         DECLS[k] = t
     return DECLS
