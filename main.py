@@ -1,12 +1,10 @@
-from re import sub
-from pycparser import c_ast, CParser
 import subprocess
 import sys
 import os
 import json
 
-from type import *
-def resolv(node : Type, top : str, DECLS):
+def resolv(node, top : str, DECLS):
+    from type import Type, Named, Opaque, Primitive
     for m in dir(node):
         a = getattr(node, m)
         if isinstance(a, Type): resolv(a, top, DECLS)
@@ -40,7 +38,7 @@ def cleanup_header(src : str) -> str:
         if next:
             l = next + l
             next = None
-        l = l.replace("__builtin_va_list", "void").replace("__restrict", "").replace("__extension__", "").replace("__inline", "")
+        l = l.replace("__builtin_va_list", "void").replace("__restrict", "").replace("__extension__", "").replace("__inline", "").replace("__signed__", "signed")
         l = l.strip()
     
         if "__attribute__" in l:
@@ -70,6 +68,7 @@ def cleanup_header(src : str) -> str:
 
 
 def make_ast(source : str):
+    from pycparser import CParser
     parser = CParser()
 
     ast = None
@@ -84,7 +83,8 @@ def make_ast(source : str):
 
 def extract_decls_from_ast(ast):
     DECLS = {}
-
+    from pycparser import c_ast
+    from type import parse_type
     class DeclVisitor(c_ast.NodeVisitor):
         def visit_Typedef(self, node):
             if node.name in DECLS: return
@@ -165,14 +165,10 @@ typename = argv[1]
 includes = argv[2:] if len(argv) > 2 else []
 includes += DEFAULT_HEADERS
 
+
 _global.init()
 _global.INCLUDES = includes
-
-DECLS = {}
-for i in includes:
-    decs = PULL_DECLS(i)
-    for d in decs:
-        DECLS[d["name"]] = d
+DECLS = {d["name"]:d for d in sum([PULL_DECLS(i) for i in includes], [])}
 
 
 

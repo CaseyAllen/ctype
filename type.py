@@ -188,6 +188,7 @@ def parse_type(node : c_ast.Node):
         elif ty == "int": return Primitive("int", mod, signed)
         elif ty == "short": return Primitive("int", mod-1, signed)
         elif ty == "long": return Primitive("int", mod+1, signed)
+        elif ty == "unsigned": return Primitive("int", mod, False)
         elif ty == "double": return Primitive("double", mod, True)
         elif ty == "float": return Primitive("float", mod, True)
         elif ty == "bool": return Primitive("bool", 0, False)
