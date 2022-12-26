@@ -197,21 +197,25 @@ def parse_type(node : c_ast.Node):
 
     if isinstance(node, c_ast.ArrayDecl):
         members = parse_type(node.type)
+        if node.dim is None: return Ptr(members)
         fname, line, col = str(node.dim.coord).split(":")
         line = int(line) -1
         col = int(col) -1
 
         lines = _global.SAUCE.splitlines()
         lno = lines[line]
-        end_idx = lno.index("]", col)
-
-        expr = lno[col:end_idx]
-        size = eval_c_expr(expr, _global.SAUCE )
+        sta_idx = lno.rindex("[")
+        end_idx = lno.index("]", sta_idx)
+        expr = lno[sta_idx+1:end_idx]
+        size = eval_c_expr(expr, "\n".join(f"#include<{h}>" for h in _global.INCLUDES) )
 
         return List(members, size)
     if isinstance(node, c_ast.Union):
+        if node.decls is None: return Opaque(node.name)
         m = {}
         for d in node.decls:
             m[d.name] = parse_type(d.type)
         return Union(m)
-    raise Exception("Unimplemented Type Node: " + str(node)) 
+    if isinstance(node, c_ast.FuncDecl): return Ptr(Opaque("func"))
+    node.show()
+    raise Exception("Unimplemented Type Node") 

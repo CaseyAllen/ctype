@@ -40,7 +40,7 @@ def cleanup_header(src : str) -> str:
         if next:
             l = next + l
             next = None
-        l = l.replace("__builtin_va_list", "void").replace("__restrict", "").replace("__extension__", "")
+        l = l.replace("__builtin_va_list", "void").replace("__restrict", "").replace("__extension__", "").replace("__inline", "")
         l = l.strip()
     
         if "__attribute__" in l:
@@ -75,9 +75,10 @@ def make_ast(source : str):
     ast = None
     try:
         ast = parser.parse(source, filename="<none>")
-    except Exception:
+    except Exception as e:
         print(source)
         print("Bug: Pycparser exception")
+        print(e)
         exit(1)
     return ast
 
@@ -98,6 +99,7 @@ def extract_decls_from_ast(ast):
     DeclVisitor().visit(ast)
 
     for k, v in DECLS.items():
+        print(k)
         t = parse_type(v)
         DECLS[k] = t
     return DECLS

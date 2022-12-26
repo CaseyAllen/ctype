@@ -14,6 +14,6 @@ def eval_c_expr(e : str, ctx : str):
     """
     Returns the value of a c expression, assuming it returns an integer
     """
-    source = ctx + f"\n\n\nint main(){{  printf(\"%lu\", {e}); return 0; }}"
+    source =  ctx+f"\n#include<stdio.h>\n\nint main(){{  printf(\"%lu\", {e}); return 0; }}"
 
     return exec_c(source)
