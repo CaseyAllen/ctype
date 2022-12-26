@@ -17,13 +17,14 @@
 ## Output Reference
 
 - **Primitives**:
-    All primitive types follow the general layout `P<s>` where `P` is the primitive prefix and `<s>` is a set of 4 bytes (big-endian) representing the primitive size in bits (with the exception of void and bool)   
+    All primitive types follow the general layout `P<s>` where `P` is the primitive prefix and `<s>` is a set of 4 bytes (big-endian) representing the primitive size in bits (with the exception of void, bool and self)   
     **prefixes**:
     - `i`: A signed integer
     - `u`: An unsigned integer
     - `f`: A floating-point number
     - `v`: void
     - `b`: a boolean value
+    - `s`: a self-reference back to the root (requested) type 
 
 ---
 

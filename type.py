@@ -28,6 +28,7 @@ class Opaque(Type):
         return -1;
 
     def encode(self):
+        if self.resolves: return self.resolves.encode()
         return "o"
 
 class Ptr(Type):
@@ -133,7 +134,7 @@ class Primitive(Type):
         if self.name == "double":
             t = c_double if self.mod == 0 else c_longdouble if self.mod == 1 else None
             return f"f{i2s(sizeof(t)*8)}"
-
+        if self.name == "self": return "s"
         raise Exception("Unhandled primitive: " + str(self))
 class Named(Type):
     def __init__(self, name):
