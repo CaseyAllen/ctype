@@ -139,4 +139,4 @@ d = DECLS[typename]
 if pretty:
     print(d)
 else:
-    print(d.encode())
+    print(d.encode(), end="")

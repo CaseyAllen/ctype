@@ -118,19 +118,21 @@ class Primitive(Type):
     def size(self):
         raise Exception("cannot get size of " + str(self))
     def encode(self):
-        if self.name == "char": return "i8" if self.signed else "u8"
+        if self.name == "char": return "i"+i2s(8) if self.signed else "u"+i2s(8)
         if self.name == "int":
             p = "i" if self.signed else "u"
             t = c_int if self.mod == 0 else c_long if self.mod == 1 else c_longlong if self.mod == 2 else c_short if self.mod == -1 else None
             if not t: raise Exception("Unhandled primitive int: " + str(self))
-            return f"{p}{sizeof(t)*8}"
+            return f"{p}{i2s(sizeof(t)*8)}"
         if self.name == "void": return "v"
+        if self.name == "bool": return "b"
         if self.name == "float":
             t = c_float if self.mod == 0 else None
-            return f"f{sizeof(t)*8}"
+            return f"f{i2s(sizeof(t)*8)}"
         if self.name == "double":
             t = c_double if self.mod == 0 else c_longdouble if self.mod == 1 else None
-            return f"f{sizeof(t)*8}"
+            return f"f{i2s(sizeof(t)*8)}"
+
         raise Exception("Unhandled primitive: " + str(self))
 class Named(Type):
     def __init__(self, name):
