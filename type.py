@@ -1,7 +1,6 @@
 from ctypes import *
-from _global import SAUCE, INCLUDES
 from execute import eval_c_expr
-
+import _global
 def get_bit(i : int, n : int):
     return (i >> (n*8)) & 0xff
 
@@ -202,12 +201,12 @@ def parse_type(node : c_ast.Node):
         line = int(line) -1
         col = int(col) -1
 
-        lines = SAUCE.splitlines()
+        lines = _global.SAUCE.splitlines()
         lno = lines[line]
         end_idx = lno.index("]", col)
 
         expr = lno[col:end_idx]
-        size = eval_c_expr(expr, "\n".join( [f"#include<{i}>" for i in INCLUDES] ))
+        size = eval_c_expr(expr, _global.SAUCE )
 
         return List(members, size)
     if isinstance(node, c_ast.Union):
@@ -216,4 +215,3 @@ def parse_type(node : c_ast.Node):
             m[d.name] = parse_type(d.type)
         return Union(m)
     raise Exception("Unimplemented Type Node: " + str(node)) 
-    pass
