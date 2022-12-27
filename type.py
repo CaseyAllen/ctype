@@ -53,6 +53,29 @@ class List(Type):
     def encode(self):
         return f"a{i2s(self.size)}{self.of.encode()}"
 
+class Enum(Type):
+
+    def __init__(self, members):
+        self.members = members
+    def __repr__(self):
+        ret = "struct{\n"
+        for k, m in self.members.items():
+            ret += f"\t{k} : {m},\n"
+        return ret + "}"
+    def encode(self):
+        ret = "E" + i2s(len(self.members))
+        # for each member:
+        # name0x0val|
+        for n, t in self.members.items():
+            ret += n
+            ret += chr(0)
+            ret += i2s(t)
+            ret +="|"
+        if len(self.members): ret = ret[:-1]
+        return ret
+
+
+
 class Struct(Type):
     def __init__(self, members):
         self.members = members
@@ -116,6 +139,9 @@ class Primitive(Type):
             for i in range(-self.mod): ret+="short "
         return ret + self.name
     def size(self):
+        if self.name == "char": return 8
+        if self.name == "int":
+            return sizeof(c_int if self.mod == 0 else c_long if self.mod == 1 else c_longlong if self.mod == 2 else c_short if self.mod == -1 else c_int)
         raise Exception("cannot get size of " + str(self))
     def encode(self):
         if self.name == "char": return "i"+i2s(8) if self.signed else "u"+i2s(8)
@@ -135,6 +161,11 @@ class Primitive(Type):
             return f"f{i2s(sizeof(t)*8)}"
         if self.name == "self": return "s"
         raise Exception("Unhandled primitive: " + str(self))
+
+
+class Sizeof:
+    def __init__(self, ty):
+        self.ty = ty
 class Named(Type):
     def __init__(self, name):
         self.name = name
@@ -144,6 +175,8 @@ class Named(Type):
         return str(self.resolves) if self.resolves is not None else self.name
     def encode(self):
         return self.resolves.encode()
+    def size(self):
+        return self.resolves.size()
 from pycparser import c_ast
 
 def parse_struct(node : c_ast.Struct):
@@ -151,7 +184,11 @@ def parse_struct(node : c_ast.Struct):
         return Opaque(node.name)
     else:
         decs = {}
+        anon_cnt = 0
         for d in node.decls:
+            if not d.name: 
+                anon_cnt+= 1
+                d.name = "anon." + str(anon_cnt)
             dname = d.name
             dtype = d.type
             typ = parse_type(dtype)
@@ -159,13 +196,25 @@ def parse_struct(node : c_ast.Struct):
         return Struct(decs)
 
 PSTR = [
-    "int", "bool", "float", "double", "char", "__int128", "void",
+    "int", "bool", "float", "double", "char", "__int128", "void", "_Bool",
     "short", "long", "unsigned", "signed"
 ]
 
+def evaluate_str(node):
+    if isinstance(node, c_ast.Constant): return str(node.value)
+    if isinstance(node, c_ast.Cast): return evaluate(node.expr)
+    if isinstance(node, c_ast.BinaryOp): return f"({evaluate_str(node.left)} {node.op} {evaluate_str(node.right)})"
+    if isinstance(node, c_ast.UnaryOp):
+        if node.op == "sizeof": return f"sizeof({parse_type(node.expr)})"
+    
+    raise Exception("unimplemented eval")
+
+def evaluate(node):
+    return eval_c_expr(evaluate_str(node), "\n".join([f"#include<{h}>" for h in _global.INCLUDES]))
 
 def parse_type(node : c_ast.Node):
     if isinstance(node, c_ast.TypeDecl): return parse_type(node.type)
+    if isinstance(node, c_ast.Typename): return parse_type(node.type)
     if isinstance(node, c_ast.PtrDecl): return Ptr(parse_type(node.type))
     if isinstance(node, c_ast.Struct): return parse_struct(node)
     if isinstance(node, c_ast.IdentifierType):
@@ -194,21 +243,13 @@ def parse_type(node : c_ast.Node):
         elif ty == "bool": return Primitive("bool", 0, False)
         elif ty == "__int128": return Primitive("int128", mod, signed)
         elif ty == "void": return Primitive("void", mod, signed)
+        elif ty == "_Bool": return Primitive("bool", 0, False)
         raise Exception("Unimplemented Primitive: " + ty)
 
     if isinstance(node, c_ast.ArrayDecl):
         members = parse_type(node.type)
         if node.dim is None: return Ptr(members)
-        fname, line, col = str(node.dim.coord).split(":")
-        line = int(line) -1
-        col = int(col) -1
-
-        lines = _global.SAUCE.splitlines()
-        lno = lines[line]
-        sta_idx = lno.rindex("[")
-        end_idx = lno.index("]", sta_idx)
-        expr = lno[sta_idx+1:end_idx]
-        size = eval_c_expr(expr, "\n".join(f"#include<{h}>" for h in _global.INCLUDES) )
+        size = evaluate(node.dim)
 
         return List(members, size)
     if isinstance(node, c_ast.Union):
@@ -218,5 +259,14 @@ def parse_type(node : c_ast.Node):
             m[d.name] = parse_type(d.type)
         return Union(m)
     if isinstance(node, c_ast.FuncDecl): return Opaque("func")
+    if isinstance(node, c_ast.Enum):
+        members = {}
+        for m in node.values:
+            print(m)
+            name = m.name
+            val = evaluate(m.value)
+            members[name] = val
+        return Enum(members)
+
     node.show()
     raise Exception("Unimplemented Type Node") 

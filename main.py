@@ -1,10 +1,13 @@
+from ctypes import addressof
 import subprocess
 import sys
 import os
 import json
+import _global
 
 def resolv(node, top : str, DECLS):
     from type import Type, Named, Opaque, Primitive
+    # print(addressof(node))
     for m in dir(node):
         a = getattr(node, m)
         if isinstance(a, Type): resolv(a, top, DECLS)
@@ -107,14 +110,9 @@ def extract_decls_from_ast(ast):
 
 CACHE_DIR =  os.path.join( os.path.dirname(__file__), "cache" )
 
-def PULL_DECLS(headerfile : str):
-    cache_path = os.path.join(CACHE_DIR, headerfile) + ".json"
-    if os.path.exists(cache_path):
-        f = open(cache_path, "r")
-        data = json.load(f)
-        f.close()
-        return data
-    else:
+
+def CREATE_DECL(headerfile : str) -> str:
+        cache_path = os.path.join(CACHE_DIR, headerfile) + ".json" 
         clang = subprocess.Popen(("clang", "-E", "-", "-include"+headerfile), stdout=subprocess.PIPE, stdin=subprocess.PIPE)
         source = clang.communicate(b"")[0].decode("utf8")
         source = cleanup_header(source)
@@ -139,46 +137,16 @@ def PULL_DECLS(headerfile : str):
         return decls_json
 
 
-
-DEFAULT_HEADERS = [
-    "stdio.h",
-    "ctype.h",
-    "sys/stat.h",
-    "string.h",
-    "math.h"
-]
-
-
-import _global
-argv = sys.argv[:]
-pretty = "-p" in argv
-
-if pretty:
-    idx = argv.index("-p")
-    argv = argv[:idx] + argv[idx+1:]
-
-if len(argv) < 2:
-    print("Error: Expected a type name")
-    exit(1)
-
-typename = argv[1]
-includes = argv[2:] if len(argv) > 2 else []
-includes += DEFAULT_HEADERS
-
-
-_global.init()
-_global.INCLUDES = includes
-DECLS = {d["name"]:d for d in sum([PULL_DECLS(i) for i in includes], [])}
+def PULL_DECLS(headerfile : str):
+    cache_path = os.path.join(CACHE_DIR, headerfile) + ".json"
+    if os.path.exists(cache_path):
+        f = open(cache_path, "r")
+        data = json.load(f)
+        f.close()
+        return data
+    else:
+        return CREATE_DECL(headerfile)
 
 
 
-if typename not in DECLS:
-    print("Error: Failed to find type: " + typename)
-    exit(1)
 
-d = DECLS[typename]
-
-if pretty:
-    print(d["pretty_str"])
-else:
-    print(d["encoded_str"], end="")
