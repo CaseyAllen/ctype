@@ -1,9 +1,32 @@
 from ctypes import addressof
+from datetime import datetime
 import subprocess
 import sys
 import os
 import json
 import _global
+
+import sqlite3
+
+con = sqlite3.connect("cache.db")
+cur = con.cursor()
+
+cur.execute("CREATE TABLE IF NOT EXISTS headers(name STRING PRIMARY KEY, last_update DATE NOT NULL)")
+cur.execute("""CREATE TABLE IF NOT EXISTS dependencies(
+    base STRING NOT NULL,
+    targets STRING NOT NULL,
+    FOREIGN KEY(base) REFERENCES headers(name),
+    FOREIGN KEY(targets) REFERENCES headers(name)
+    )""")
+cur.execute("""CREATE TABLE IF NOT EXISTS declarations(
+    name STRING PRIMARY KEY,
+    header STRING NOT NULL,
+    pretty_str STRING NOT NULL,
+    encode_str STRING NOT NULL,
+    FOREIGN KEY(header) REFERENCES headers(name)
+    )""")
+
+con.commit()
 
 def resolv(node, top : str, DECLS):
     from type import Type, Named, Opaque, Primitive
@@ -21,10 +44,13 @@ def resolv(node, top : str, DECLS):
         if node.name == top: return
         node.resolves = DECLS[node.name]
     if isinstance(node, Opaque):
-        if node.name != top and node.name in DECLS and DECLS[node.name] != node:
+        if node.name in DECLS and DECLS[node.name] == node:
+            pass
+        elif node.name != top and node.name in DECLS:
             node.resolves = DECLS[node.name]
-        if node.name == top:
+        elif node.name == top:
             node.resolves = Primitive("self", 0, True)
+
 
 
 def cleanup_header(src : str) -> str:
@@ -59,8 +85,8 @@ def cleanup_header(src : str) -> str:
             next = l
             continue
 
-        if l[0] == "#":
-            continue
+        # if l[0] == "#":
+            # continue
 
         new_data.append(l)
     new_data = [l for l in new_data if not l.startswith("extern")]
@@ -101,52 +127,108 @@ def extract_decls_from_ast(ast):
 
     DeclVisitor().visit(ast)
 
+    cnt = {}
     for k, v in DECLS.items():
+        if not k in cnt: cnt[k] = 0
+        cnt[k] += 1
         t = parse_type(v)
+        t.pos = str(v.coord).split(":")[0]
         DECLS[k] = t
     return DECLS
 
 
 
-CACHE_DIR =  os.path.join( os.path.dirname(__file__), "cache" )
 
+def assert_headers_exist(headers):
+    # print(headers)
+    result = cur.execute("SELECT 1 FROM headers WHERE name = ?", [headers])
+    data = result.fetchall()
+    # print(data)
 
-def CREATE_DECL(headerfile : str) -> str:
-        cache_path = os.path.join(CACHE_DIR, headerfile) + ".json" 
+def assert_header_entry_exists(header : str):
+    args = [ header ]
+    result = cur.execute("SELECT 1 FROM headers WHERE name = ?", args).fetchone()
+    if result: return True
+
+    # Build dependencies
+    output = subprocess.Popen(("cc", "-H", header, "-o", ".tmp"), stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    output.wait()
+    deps = output.stderr.read().decode("utf8")
+    deps = [l[2:].strip() for l in deps.splitlines() if l.startswith(". ")]
+
+    # Create a new header
+    # print("made ", header)
+    res = cur.execute("INSERT INTO headers(name, last_update) VALUES (?, ?)", [header, datetime.now()])
+
+    # Create deps
+    for dep in deps:
+        res = cur.execute("INSERT INTO dependencies(base, targets) VALUES (?, ?)", [header, dep])
+    con.commit()
+
+def mkdcl(headerfile : str):
         clang = subprocess.Popen(("clang", "-E", "-", "-include"+headerfile), stdout=subprocess.PIPE, stdin=subprocess.PIPE)
         source = clang.communicate(b"")[0].decode("utf8")
         source = cleanup_header(source)
         _global.SAUCE = source
         ast = make_ast(source)
         decls = extract_decls_from_ast(ast)
-        
-        decls_json = []
+
+        from type import Opaque
+
+        DCS = {}
         for k, v in decls.items():
             resolv(v, k, decls)
-            decls_json.append({
+            if not v.pos in DCS:
+                # print("--------")
+                DCS[v.pos] = []
+
+            # print(v.pos, k)
+            OBJ = {
                 "name" : k,
                 "pretty_str" : str(v),
-                "encoded_str" : v.encode()
+                "encode_str" : v.encode()
+            }
+            # print(OBJ)
+            DCS[v.pos].append(OBJ)
 
-            })
+        RET = []
 
-        os.makedirs(os.path.dirname(cache_path), exist_ok=True)
-        f = open(cache_path, "w")
-        json.dump(decls_json, f)
-        f.close()
-        return decls_json
+        for k in DCS.keys():
+            already_exists = assert_header_entry_exists(k)
+
+            # print("HEADER: " + k)
+            if already_exists: 
+                # print(">>> EXISTS")
+                continue
+            # name, header, pretty_str, encode_str
+            EXEC = []
+            for value in DCS[k]:
+                name = value["name"]
+                # print(name)
+                pretty = value["pretty_str"]
+                encode = value["encode_str"]
+                EXEC.append(( name, k, pretty, encode ))
+                RET.append(value)
+                pass
+            result = cur.executemany("INSERT OR REPLACE into declarations(name, header, pretty_str, encode_str) VALUES (?, ?, ?, ?)", EXEC)
+        con.commit()
+def BATCH_CREATE_DECL(headerfiles):
+    assert_headers_exist(headerfiles)
+    pass
+
+def CREATE_DECL(headerfile : str):
+        exists = assert_header_entry_exists(headerfile)
+        if exists: return
+        mkdcl(headerfile)
 
 
-def PULL_DECLS(headerfile : str):
-    cache_path = os.path.join(CACHE_DIR, headerfile) + ".json"
-    if os.path.exists(cache_path):
-        f = open(cache_path, "r")
-        data = json.load(f)
-        f.close()
-        return data
-    else:
-        return CREATE_DECL(headerfile)
 
-
-
+def GET_DECL(name : str):
+    res = cur.execute("SELECT * FROM declarations WHERE name = ?", [name])
+    data = res.fetchone()
+    if not data: return None
+    return {
+        "pretty" : data[2],
+        "encode" : data[3]
+    }
 

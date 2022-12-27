@@ -35,17 +35,24 @@ DEFAULT_HEADERS = [
     "threads.h",
     "time.h",
     "uchar.h",
-    "wchar.h",
+    # "wchar.h",
     "wctype.h"
 ]
+
+# DEFAULT_HEADERS = [
+    # "stdio.h"
+# ]
 
 
 import _global
 argv = sys.argv[:]
 pretty = "-p" in argv
-
+nocache = "-n" in argv
 if pretty:
     idx = argv.index("-p")
+    argv = argv[:idx] + argv[idx+1:]
+if nocache:
+    idx = argv.index("-n")
     argv = argv[:idx] + argv[idx+1:]
 
 if len(argv) < 2:
@@ -54,22 +61,25 @@ if len(argv) < 2:
 
 typename = argv[1]
 includes = argv[2:] if len(argv) > 2 else []
-includes += DEFAULT_HEADERS
+includes = [*set(includes + DEFAULT_HEADERS)]
 
 
 _global.init()
 _global.INCLUDES = includes
-DECLS = {d["name"]:d for d in sum([main.PULL_DECLS(i) for i in includes], [])}
+
+DECLS = {}
+
+for i in includes: main.CREATE_DECL(i)
+# main.BATCH_CREATE_DECL(includes)
 
 
+d = main.GET_DECL(typename)
 
-if typename not in DECLS:
-    print("Error: Failed to find type: " + typename)
+if not d:
+    print("Error: failed to locate type: " + typename)
     exit(1)
 
-d = DECLS[typename]
-
 if pretty:
-    print(d["pretty_str"])
+    print(d["pretty"])
 else:
-    print(d["encoded_str"], end="")
+    print(d["encode"], end="")

@@ -113,7 +113,7 @@ class Union(Type):
             if s > bg: bg = s
         return bg
     def __repr__(self):
-        return "enum\n\t" + ", \n\t".join([ f"{k} : {v}" for k, v in self.members.items() ])
+        return "union\n\t" + ", \n\t".join([ f"{k} : {v}" for k, v in self.members.items() ])
     def encode(self):
         ret = "U" + i2s(len(self.members))
         # for each member:
@@ -174,6 +174,7 @@ class Named(Type):
     def __repr__(self):
         return str(self.resolves) if self.resolves is not None else self.name
     def encode(self):
+        if not self.resolves: raise Exception("Attempt to encode unresolved Named type: " + self.name)
         return self.resolves.encode()
     def size(self):
         return self.resolves.size()
@@ -262,7 +263,6 @@ def parse_type(node : c_ast.Node):
     if isinstance(node, c_ast.Enum):
         members = {}
         for m in node.values:
-            print(m)
             name = m.name
             val = evaluate(m.value)
             members[name] = val

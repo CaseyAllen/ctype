@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 
+cache.db
 cache/
